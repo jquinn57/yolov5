@@ -110,7 +110,8 @@ def export_formats():
         ['TensorFlow Lite', 'tflite', '.tflite', True, False],
         ['TensorFlow Edge TPU', 'edgetpu', '_edgetpu.tflite', False, False],
         ['TensorFlow.js', 'tfjs', '_web_model', False, False],
-        ['PaddlePaddle', 'paddle', '_paddle_model', True, True], ]
+        ['PaddlePaddle', 'paddle', '_paddle_model', True, True], 
+        ['Memryx', 'memryx', '.dfp', True, False]]
     return pd.DataFrame(x, columns=['Format', 'Argument', 'Suffix', 'CPU', 'GPU'])
 
 
@@ -192,7 +193,7 @@ def export_onnx(model, im, file, opset, dynamic, simplify, prefix=colorstr('ONNX
     if simplify:
         try:
             cuda = torch.cuda.is_available()
-            check_requirements(('onnxruntime-gpu' if cuda else 'onnxruntime', 'onnx-simplifier>=0.4.1'))
+            #check_requirements(('onnxruntime-gpu' if cuda else 'onnxruntime', 'onnx-simplifier>=0.4.1'))
             import onnxsim
 
             LOGGER.info(f'{prefix} simplifying with onnx-simplifier {onnxsim.__version__}...')
@@ -734,7 +735,7 @@ def run(
     fmts = tuple(export_formats()['Argument'][1:])  # --include arguments
     flags = [x in include for x in fmts]
     assert sum(flags) == len(include), f'ERROR: Invalid --include {include}, valid --include arguments are {fmts}'
-    jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle = flags  # export booleans
+    jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, memryx = flags  # export booleans
     file = Path(url2file(weights) if str(weights).startswith(('http:/', 'https:/')) else weights)  # PyTorch weights
 
     # Load PyTorch model

@@ -344,7 +344,7 @@ class DetectMultiBackend(nn.Module):
 
         super().__init__()
         w = str(weights[0] if isinstance(weights, list) else weights)
-        pt, jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, triton = self._model_type(w)
+        pt, jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, memryx, triton = self._model_type(w)
         fp16 &= pt or jit or onnx or engine or triton  # FP16
         nhwc = coreml or saved_model or pb or tflite or edgetpu  # BHWC formats (vs torch BCWH)
         stride = 32  # default stride
@@ -375,11 +375,14 @@ class DetectMultiBackend(nn.Module):
             net = cv2.dnn.readNetFromONNX(w)
         elif onnx:  # ONNX Runtime
             LOGGER.info(f'Loading {w} for ONNX Runtime inference...')
-            check_requirements(('onnx', 'onnxruntime-gpu' if cuda else 'onnxruntime'))
+            #check_requirements(('onnx', 'onnxruntime-gpu' if cuda else 'onnxruntime'))
             import onnxruntime
-            providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if cuda else ['CPUExecutionProvider']
+            providers = ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider'] if cuda else ['CPUExecutionProvider']
+            #providers = ['CUDAExecutionProvider'] if cuda else ['CPUExecutionProvider']
+            print(providers)
             session = onnxruntime.InferenceSession(w, providers=providers)
             output_names = [x.name for x in session.get_outputs()]
+            print(output_names)
             meta = session.get_modelmeta().custom_metadata_map  # metadata
             if 'stride' in meta:
                 stride, names = int(meta['stride']), eval(meta['names'])
@@ -498,6 +501,28 @@ class DetectMultiBackend(nn.Module):
             predictor = pdi.create_predictor(config)
             input_handle = predictor.get_input_handle(predictor.get_input_names()[0])
             output_names = predictor.get_output_names()
+        elif memryx: 
+            LOGGER.info(f'Loading {w} for Memryx inference...')
+            from memryx import SyncAccl
+            accl = SyncAccl(w)
+
+            # use onnx runtime on the CPU for post-processing
+            import onnxruntime
+            providers = ['CPUExecutionProvider']
+            # hacky 
+            onnx_filename = 'model_0_' + w.replace('.dfp', '_post.onnx')
+            LOGGER.info(f'Loading post-processing model: {onnx_filename}')
+            session = onnxruntime.InferenceSession(onnx_filename, providers=providers)
+            output_names = [x.name for x in session.get_outputs()]
+            input_names = [x.name for x in session.get_inputs()]
+            LOGGER.info(input_names)
+            LOGGER.info(output_names)
+            for input_var in session.get_inputs():
+                LOGGER.info(input_var.shape)
+            for output_var in session.get_outputs():
+                LOGGER.info(output_var.shape)
+
+
         elif triton:  # NVIDIA Triton Inference Server
             LOGGER.info(f'Using {w} as Triton Inference Server...')
             check_requirements('tritonclient[all]')
@@ -532,7 +557,7 @@ class DetectMultiBackend(nn.Module):
             self.net.setInput(im)
             y = self.net.forward()
         elif self.onnx:  # ONNX Runtime
-            im = im.cpu().numpy()  # torch to numpy
+            im = im.cpu().numpy().astype(np.float32)  # torch to numpy
             y = self.session.run(self.output_names, {self.session.get_inputs()[0].name: im})
         elif self.xml:  # OpenVINO
             im = im.cpu().numpy()  # FP32
@@ -566,6 +591,18 @@ class DetectMultiBackend(nn.Module):
             self.input_handle.copy_from_cpu(im)
             self.predictor.run()
             y = [self.predictor.get_output_handle(x).copy_to_cpu() for x in self.output_names]
+
+        elif self.memryx:
+            # input image is scaled between 0 and 1
+            im = im.cpu().numpy().astype(np.float32)
+            im = np.transpose(im, (2, 3, 0, 1))
+            y0 = self.accl.run(im.squeeze())
+            # run post-processing onnx model on the CPU
+            input_dict = {}
+            for i, yy in enumerate(y0):
+                input_dict[self.input_names[i]] = np.expand_dims(np.transpose(yy, (2, 0, 1)), axis=0)
+            y = self.session.run(self.output_names, input_dict)
+
         elif self.triton:  # NVIDIA Triton Inference Server
             y = self.model(im)
         else:  # TensorFlow (SavedModel, GraphDef, Lite, Edge TPU)
@@ -611,7 +648,7 @@ class DetectMultiBackend(nn.Module):
     @staticmethod
     def _model_type(p='path/to/model.pt'):
         # Return model type from model path, i.e. path='path/to/model.onnx' -> type=onnx
-        # types = [pt, jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle]
+        # types = [pt, jit, onnx, xml, engine, coreml, saved_model, pb, tflite, edgetpu, tfjs, paddle, memryx]
         from export import export_formats
         from utils.downloads import is_url
         sf = list(export_formats().Suffix)  # export suffixes

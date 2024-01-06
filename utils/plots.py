@@ -124,17 +124,20 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None):
     bs, _, h, w = images.shape  # batch size, _, height, width
     bs = min(bs, max_subplots)  # limit plot images
     ns = np.ceil(bs ** 0.5)  # number of subplots (square)
-    if np.max(images[0]) <= 1:
-        images *= 255  # de-normalise (optional)
+
+    images2 = images.copy()
+    images2  = images2 * 255
+    #if images.max() <= 1:
+    #    images *= 255  # de-normalise (optional)
 
     # Build Image
     mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)  # init
-    for i, im in enumerate(images):
+    for i, im in enumerate(images2):
         if i == max_subplots:  # if last batch has fewer images than we expect
             break
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         im = im.transpose(1, 2, 0)
-        mosaic[y:y + h, x:x + w, :] = im
+        mosaic[y:y + h, x:x + w, :] = im.astype(np.uint8)
 
     # Resize (optional)
     scale = max_size / ns / max(h, w)

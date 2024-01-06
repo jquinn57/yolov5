@@ -72,6 +72,17 @@ WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 GIT_INFO = check_git_info()
 
 
+def replace_layers(model, old, new):
+    for n, module in model.named_children():
+        if len(list(module.children())) > 0:
+            ## compound module, go inside it
+            replace_layers(module, old, new)
+                                                            
+        if isinstance(module, old):
+            ## simple module
+            setattr(model, n, new())
+
+
 def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictionary
     save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze = \
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.evolve, opt.data, opt.cfg, \
@@ -135,6 +146,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
     else:
         model = Model(cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    
+    # replace silu with leakyrelu
+    print("Replacing SiLU with LeakyReLU")
+    replace_layers(model.model, torch.nn.SiLU, torch.nn.LeakyReLU)
+
     amp = check_amp(model)  # check AMP
 
     # Freeze
