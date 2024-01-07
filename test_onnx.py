@@ -31,6 +31,7 @@ def run_test(use_tensorrt, batch_size, onnx_file):
         img = cv2.imread(img_filename)
         img = cv2.resize(img, (res, res)).astype(np.float32) / 255.0
         img = np.transpose(img, (2, 0, 1))
+        # img = np.random.randn(3, res, res)
         img_batch[n, :, :, :] = img
         n += 1
         if n == batch_size:
