@@ -45,7 +45,7 @@ def run(onnx_filename, batch_sizes, res):
     mon = Monitor()
     for i, bs in enumerate(batch_sizes):
         fps = run_test(False, bs, onnx_filename, res)
-        mon_stats = mon.get_vals().max(axis=0)
+        mon_stats = mon.get_vals().mean(axis=0)
         print(mon_stats)
         stats[i, 0] = bs
         stats[i, 1] = fps
