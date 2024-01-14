@@ -42,7 +42,7 @@ def run(onnx_filename, batch_sizes, res):
 
     stats = np.zeros((len(batch_sizes), 4))
 
-    mon = Monitor()
+    mon = Monitor(monitor_power=True)
     for i, bs in enumerate(batch_sizes):
         fps = run_test(False, bs, onnx_filename, res)
         mon_stats = mon.get_vals().mean(axis=0)
@@ -71,7 +71,8 @@ def plot_figure(filename='stats.npy', title=None, plot_filename=None):
     # Create a second y-axis that shares the same x-axis
     ax2 = ax1.twinx()
 
-    ax2.plot(stats[:, 0], stats[:, 3], color='b', marker='o',label='GPU memory used')
+    ax2.plot(stats[:, 0], stats[:, 2], color='b', marker='o',label='GPU power used (W)')
+    #ax2.plot(stats[:, 0], stats[:, 3], color='b', marker='o',label='GPU memory used')
     ax2.set_ylabel('Memory %', color='b')
     ax2.set_ylim([0, 100])
     ax2.tick_params(axis='y', labelcolor='b')
@@ -101,7 +102,7 @@ if __name__ == '__main__':
         batch_sizes = [1, 2, 3, 4, 6]
         res = 640
         plot_filename = 'yolov5s_fps_vs_batch_size.png'
-        title = 'Yolov5s on RTX 4060'
+        title = 'Yolov5s on RTX 5000'
         onnx_filename = 'yolov5s-leakyrelu3-dynamic.onnx'
 
     run(onnx_filename, batch_sizes, res)

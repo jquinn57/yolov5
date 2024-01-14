@@ -7,11 +7,14 @@ import queue
 import numpy as np
 
 class Monitor():
-    def __init__(self):
+    def __init__(self, monitor_power=False):
 
         # monitor the GPU utilization stats
         # on some GPUs this method could also be used to monitor power usage, but unfortunatly not on the RTX 4060
-        command_str = "nvidia-smi dmon -i 0  -s u -c -1"
+        if monitor_power:
+            command_str = 'nvidia-smi dmon -i 0 -s p -c -1'
+        else:
+            command_str = "nvidia-smi dmon -i 0  -s u -c -1"
         command = command_str.split()
         print(command)
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
@@ -24,7 +27,7 @@ class Monitor():
         
         while self.running:
             output = self.process.stdout.readline()
-            row = output.decode().split()
+            row = output.decode().split()[:3]
             if row[0] == '0':
                 vals = list(map(int, row))
                 self.queue.put(vals)
